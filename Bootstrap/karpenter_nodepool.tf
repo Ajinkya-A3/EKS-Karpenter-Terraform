@@ -220,8 +220,8 @@ resource "kubectl_manifest" "karpenter_node_pool_ondemand_amd64" {
         cpu: 200
         memory: 800Gi
       disruption:
-        consolidationPolicy: WhenEmpty  # never evict running pods
-        consolidateAfter: 30m
+        consolidationPolicy: WhenEmptyOrUnderutilized  # use podDisruptionBudget and proper handling in the code 
+        consolidateAfter: 20m
       weight: 10
   YAML
 
