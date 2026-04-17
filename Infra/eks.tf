@@ -116,6 +116,10 @@ resource "aws_eks_node_group" "ondemand-node" {
     min_size     = var.min_size
   }
 
+  update_config {
+    max_unavailable = 1 # only 1 of nodes can be unavailable at once
+  }
+
   launch_template {
     id      = aws_launch_template.node.id
     version = aws_launch_template.node.latest_version
@@ -123,6 +127,8 @@ resource "aws_eks_node_group" "ondemand-node" {
 
   labels = {
     "type" = "ondemand"
+    "role"      = "system"          # ← clear role label
+    "node-type" = "managed"         # ← distinguishes from Karpenter nodes
   }
 
   tags = merge(var.tags, {
