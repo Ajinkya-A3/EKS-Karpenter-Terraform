@@ -122,3 +122,60 @@ output "karpenter_sqs_queue_name" {
   description = "Name of the Karpenter interruption SQS queue"
   value       = aws_sqs_queue.karpenter_interruption.name
 }
+
+# =========================================
+# AURORA SERVERLESS v2 (PostgreSQL)
+# =========================================
+
+output "aurora_cluster_endpoint" {
+  description = "Writer endpoint — use as the host in your PostgreSQL connection string."
+  value       = try(aws_rds_cluster.aurora[0].endpoint, null)
+}
+
+output "aurora_cluster_reader_endpoint" {
+  description = "Reader endpoint — use for read replicas (if/when you add reader instances)."
+  value       = try(aws_rds_cluster.aurora[0].reader_endpoint, null)
+}
+
+output "aurora_cluster_port" {
+  description = "PostgreSQL listener port (5432)."
+  value       = try(aws_rds_cluster.aurora[0].port, null)
+}
+
+output "aurora_database_name" {
+  description = "Initial database created inside the cluster."
+  value       = try(aws_rds_cluster.aurora[0].database_name, null)
+}
+
+output "aurora_cluster_resource_id" {
+  description = "Cluster resource ID (cluster-XXXX...). Appears in the rds-db:connect IAM ARN."
+  value       = try(aws_rds_cluster.aurora[0].cluster_resource_id, null)
+}
+
+output "aurora_master_user_secret_arn" {
+  description = "ARN of the Secrets Manager secret holding the auto-managed master credentials."
+  value       = try(aws_rds_cluster.aurora[0].master_user_secret[0].secret_arn, null)
+  sensitive   = true
+}
+
+output "aurora_security_group_id" {
+  description = "Aurora SG — ingress TCP/5432 from EKS node SG only."
+  value       = try(aws_security_group.aurora[0].id, null)
+}
+
+# ---- IRSA outputs (needed to annotate the K8s ServiceAccount) ----
+
+output "aurora_app_irsa_role_arn" {
+  description = "Annotate your ServiceAccount with: eks.amazonaws.com/role-arn=<this>"
+  value       = try(aws_iam_role.aurora_app[0].arn, null)
+}
+
+output "aurora_app_db_user" {
+  description = "PostgreSQL role the app authenticates as via IAM. Create with: CREATE USER app_user; GRANT rds_iam TO app_user;"
+  value       = var.aurora_app_db_user
+}
+
+output "aurora_app_service_account" {
+  description = "Kubernetes ServiceAccount (namespace/name) bound to the Aurora IRSA role."
+  value       = try("${var.aurora_app_service_account_namespace}/${var.aurora_app_service_account_name}", null)
+}
