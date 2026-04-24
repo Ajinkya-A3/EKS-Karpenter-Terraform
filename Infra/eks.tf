@@ -137,8 +137,14 @@ resource "aws_eks_node_group" "ondemand-node" {
 
   depends_on = [
     aws_iam_role_policy_attachment.node_policies,
-    aws_nat_gateway.nat  # ensure NAT is ready before nodes try to pull images
+    aws_nat_gateway.nat
   ]
+
+  lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size  # prevent Terraform from reverting autoscaler changes
+    ]
+  }
 }
 
 # =========================
