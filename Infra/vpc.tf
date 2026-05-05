@@ -199,3 +199,98 @@ resource "aws_security_group_rule" "alb_to_node" {
   cidr_blocks       = [var.vpc_cidr]
   description       = "Allow ALB to reach node ports"
 }
+
+# ─────────────────────────────────────────────────────────────────
+# STUNNER / LIVEKIT — ADDITIONAL INGRESS RULES
+# ─────────────────────────────────────────────────────────────────
+
+# TURN-UDP (STUN + TURN relay) — port 3478
+resource "aws_security_group_rule" "stunner_turn_udp" {
+  type              = "ingress"
+  from_port         = 3478
+  to_port           = 3478
+  protocol          = "udp"
+  security_group_id = aws_security_group.node.id
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "STUNner TURN-UDP - STUN binding + TURN relay"
+}
+
+# TURN-TLS (encrypted TURN, firewall-safe) — port 443 TCP
+# NLB is pure TCP passthrough — STUNner terminates TLS itself.
+# This is separate from the cluster API 443 rule which targets
+# aws_security_group.eks_cluster, not the node SG.
+resource "aws_security_group_rule" "stunner_turn_tls" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  security_group_id = aws_security_group.node.id
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "STUNner TURN-TLS port 443 - TCP passthrough from NLB"
+}
+
+# TURN relay ephemeral ports — media allocation
+# STUNner allocates relay endpoints from this range per TURN session.
+# Without this, ICE succeeds but no audio/video flows.
+resource "aws_security_group_rule" "stunner_turn_relay_ports" {
+  type              = "ingress"
+  from_port         = 49152
+  to_port           = 65535
+  protocol          = "udp"
+  security_group_id = aws_security_group.node.id
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "STUNner TURN relay ephemeral UDP ports - WebRTC media"
+}
+
+# LiveKit signaling — WebSocket HTTP dev mode
+# Only needs to be reachable within VPC (ingress / internal LB).
+# If you expose LiveKit externally via ALB, change cidr_blocks to 0.0.0.0/0.
+resource "aws_security_group_rule" "livekit_signaling_http" {
+  type              = "ingress"
+  from_port         = 7880
+  to_port           = 7880
+  protocol          = "tcp"
+  security_group_id = aws_security_group.node.id
+  cidr_blocks       = [var.vpc_cidr]
+  description       = "LiveKit signaling WebSocket HTTP - dev mode, VPC only"
+}
+
+# LiveKit signaling — WebSocket TLS
+resource "aws_security_group_rule" "livekit_signaling_tls" {
+  type              = "ingress"
+  from_port         = 7881
+  to_port           = 7881
+  protocol          = "tcp"
+  security_group_id = aws_security_group.node.id
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "LiveKit signaling WebSocket TLS"
+}
+
+# NLB health checks → nodes
+# AWS NLB health checks come from within the VPC. Without this,
+# NLB targets stay unhealthy and no traffic is forwarded.
+resource "aws_security_group_rule" "nlb_health_check" {
+  type              = "ingress"
+  from_port         = 8086
+  to_port           = 8086
+  protocol          = "tcp"
+  security_group_id = aws_security_group.node.id
+  cidr_blocks       = [var.vpc_cidr]
+  description       = "NLB health check - STUNner health port"
+}
+
+# ─────────────────────────────────────────────────────────────────
+# LIVEKIT RTC — UDP MEDIA PORTS
+# ─────────────────────────────────────────────────────────────────
+
+# LiveKit RTC UDP port range — direct WebRTC media to SFU
+# Matches port_range_start: 50000 / port_range_end: 60000 in livekit.yaml
+resource "aws_security_group_rule" "livekit_rtc_udp" {
+  type              = "ingress"
+  from_port         = 50000
+  to_port           = 60000
+  protocol          = "udp"
+  security_group_id = aws_security_group.node.id
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "LiveKit RTC UDP media port range 50000-60000"
+}
