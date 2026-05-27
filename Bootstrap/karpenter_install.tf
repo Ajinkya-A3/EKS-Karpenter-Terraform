@@ -1,26 +1,3 @@
-# =========================
-# EKS Access Entry for Karpenter Node Role
-# (your cluster uses authentication_mode = "API", so no aws-auth ConfigMap needed)
-# =========================
-resource "aws_eks_access_entry" "karpenter_node" {
-  cluster_name  = aws_eks_cluster.eks.name
-  principal_arn = aws_iam_role.karpenter_node.arn
-  type          = "EC2_LINUX"
-
-  depends_on = [aws_eks_cluster.eks]
-}
-
-# =========================
-# Null resource for alb installation dependency
-# =========================
-
-resource "null_resource" "wait_for_alb" {
-  depends_on = [helm_release.alb]
-
-  provisioner "local-exec" {
-    command = "aws eks update-kubeconfig --region ${var.region} --name ${var.cluster_name} && kubectl wait --namespace kube-system --for=condition=available deployment/aws-load-balancer-controller --timeout=300s"
-  }
-}
 
 
 # =========================
@@ -31,7 +8,6 @@ resource "kubernetes_namespace_v1" "karpenter" {
   metadata {
     name = var.karpenter_namespace
   }
-  depends_on = [null_resource.wait_for_nodes]
 }
 
 # =========================
@@ -51,17 +27,17 @@ resource "helm_release" "karpenter" {
   set = [
     {
       name  = "settings.clusterName"
-      value = aws_eks_cluster.eks.name
+      value = local.cluster_name
     },
 
     {
       name  = "settings.interruptionQueue"
-      value = aws_sqs_queue.karpenter_interruption.name
+      value = local.karpenter_queue_name
     },
 
     {
       name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-      value = aws_iam_role.karpenter_controller.arn
+      value = local.karpenter_controller_role_arn
     },
 
     {
@@ -97,15 +73,12 @@ resource "helm_release" "karpenter" {
 
     {
       name  = "affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].values[0]"
-      value = aws_eks_node_group.ondemand-node.node_group_name
+      value = local.node_group_name
     }
   ]
 
   depends_on = [
-    aws_iam_role_policy.karpenter_controller_policy,
-    aws_eks_access_entry.karpenter_node,
     kubernetes_namespace_v1.karpenter,
-    null_resource.wait_for_alb,
     helm_release.karpenter_crds
   ]
 }
@@ -126,6 +99,6 @@ resource "helm_release" "karpenter_crds" {
 
   depends_on = [
     kubernetes_namespace_v1.karpenter,
-    null_resource.wait_for_alb
+    helm_release.alb
   ]
 }

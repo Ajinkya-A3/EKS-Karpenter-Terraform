@@ -1,4 +1,16 @@
 # =========================
+# EKS Access Entry for Karpenter Node Role
+# (your cluster uses authentication_mode = "API", so no aws-auth ConfigMap needed)
+# =========================
+resource "aws_eks_access_entry" "karpenter_node" {
+  cluster_name  = aws_eks_cluster.eks.name
+  principal_arn = aws_iam_role.karpenter_node.arn
+  type          = "EC2_LINUX"
+
+  depends_on = [aws_eks_cluster.eks]
+}
+
+# =========================
 # Karpenter Node IAM Role
 # =========================
 resource "aws_iam_role" "karpenter_node" {

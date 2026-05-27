@@ -1,0 +1,3 @@
+# to check the logs of the karpenter controllers
+
+kubectl logs -n karpenter -l app.kubernetes.io/name=karpenter --all-containers --follow
