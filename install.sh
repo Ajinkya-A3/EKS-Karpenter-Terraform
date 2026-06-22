@@ -22,7 +22,7 @@ echo "Cleaning up AWS CLI installation files..."
 rm -rf aws awscliv2.zip
 
 echo "Installing Helm..."
-curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-4 | bash
 
 echo
 echo "========================================="
