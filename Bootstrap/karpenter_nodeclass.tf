@@ -71,6 +71,24 @@ resource "kubectl_manifest" "karpenter_ec2_node_class_default" {
             encrypted: true     # always encrypt at rest
             deleteOnTermination: true
 
+      # -----------------------------------------------
+      # IMDS Hardening — block pods from reaching node
+      # credentials via the metadata service (SSRF defense).
+      # httpTokens: required forces IMDSv2 (session-token
+      # based) and rejects plain IMDSv1 GET requests.
+      # httpPutResponseHopLimit: 1 means the token-fetch PUT
+      # response can't survive the extra network hop a pod's
+      # netns adds, so pods (hostNetwork: false) typically
+      # can't complete the IMDSv2 handshake — the node itself
+      # still can (0 extra hops). Not a hard security boundary
+      # on its own (hostNetwork: true pods bypass it) — pair
+      # with IRSA/Pod Identity so pods never need node creds.
+      # -----------------------------------------------
+      metadataOptions:
+        httpEndpoint: enabled
+        httpProtocolIPv6: disabled
+        httpPutResponseHopLimit: 1
+        httpTokens: required
 
       # -----------------------------------------------
       # Tags — applied to the EC2 instance itself.
@@ -84,6 +102,3 @@ resource "kubectl_manifest" "karpenter_ec2_node_class_default" {
 
   depends_on = [helm_release.karpenter]
 }
-
-
-
