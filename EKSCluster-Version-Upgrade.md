@@ -84,6 +84,90 @@ eksctl utils describe-addon-versions \
   --kubernetes-version 1.36
 ```
 
+### 1.2a Find Bridge (Overlapping) Addon Versions
+
+For each addon, this script finds the newest version supported on **both** the old and the new Kubernetes version. That version is the "bridge" version, and it is safe to run across the control-plane/node version skew.
+
+```bash
+#!/usr/bin/env bash
+
+OLD_K8S="1.35"
+NEW_K8S="1.36"
+
+get_versions() {
+  aws eks describe-addon-versions \
+    --addon-name "$1" \
+    --kubernetes-version "$2" \
+    --query 'addons[0].addonVersions[].addonVersion' \
+    --output text 2>/dev/null | tr '\t' '\n' | tr -d '\r' | sort -V
+}
+
+for addon in vpc-cni coredns kube-proxy aws-ebs-csi-driver metrics-server; do
+
+  old_versions=$(get_versions "$addon" "$OLD_K8S")
+  new_versions=$(get_versions "$addon" "$NEW_K8S")
+
+  echo "===== $addon ====="
+
+  if [ -z "$old_versions" ] || [ -z "$new_versions" ]; then
+    echo "WARNING: no versions returned for $OLD_K8S or $NEW_K8S - check addon name / region"
+    echo
+    continue
+  fi
+
+  old_latest=$(echo "$old_versions" | tail -1)
+  new_latest=$(echo "$new_versions" | tail -1)
+
+  # Intersection: lines from new_versions that exactly match a line in old_versions
+  common_version=$(grep -Fxf <(echo "$old_versions") <(echo "$new_versions") | sort -V | tail -1)
+
+  echo "$OLD_K8S latest : $old_latest"
+  echo "$NEW_K8S latest : $new_latest"
+
+  if [ -z "$common_version" ]; then
+    echo "No overlapping version found - you may need an intermediate hop or must upgrade nodes first for this addon"
+  else
+    echo "Bridge version (newest common to both): $common_version"
+  fi
+  echo
+
+done
+```
+
+**Example output (1.35 → 1.36):**
+
+```
+===== vpc-cni =====
+1.35 latest : v1.23.1-eksbuild.1
+1.36 latest : v1.23.1-eksbuild.1
+Bridge version (newest common to both): v1.23.1-eksbuild.1
+
+===== coredns =====
+1.35 latest : v1.14.6-eksbuild.4
+1.36 latest : v1.14.6-eksbuild.4
+Bridge version (newest common to both): v1.14.6-eksbuild.4
+
+===== kube-proxy =====
+1.35 latest : v1.35.3-eksbuild.29
+1.36 latest : v1.36.0-eksbuild.25
+Bridge version (newest common to both): v1.35.3-eksbuild.29
+
+===== aws-ebs-csi-driver =====
+1.35 latest : v1.66.0-eksbuild.1
+1.36 latest : v1.66.0-eksbuild.1
+Bridge version (newest common to both): v1.66.0-eksbuild.1
+
+===== metrics-server =====
+1.35 latest : v0.9.0-eksbuild.11
+1.36 latest : v0.9.0-eksbuild.11
+Bridge version (newest common to both): v0.9.0-eksbuild.11
+```
+
+**How to read it:**
+- When both "latest" lines match, that one version already supports both Kubernetes versions. Use it as the bridge and as the final version.
+- When they differ (like `kube-proxy` above), the bridge is the newest version common to both. Use it while nodes are still on the old version. After the node group upgrade, move to the new-version latest (`v1.36.0-eksbuild.25` here).
+- If the script prints "No overlapping version found", no single version supports both Kubernetes versions. Upgrade that addon after the nodes, or split the upgrade into smaller hops.
+
 ### 1.3 Check Karpenter Compatibility
 
 ```bash
@@ -534,6 +618,8 @@ aws ssm get-parameter \
 aws ssm get-parameter \
   --name /aws/service/eks/optimized-ami/1.36/amazon-linux-2023/arm64/standard/recommended/release_version \
   --query Parameter.Value --output text
+
+# Bridge (overlapping) addon versions — see full script in Section 1.2a
 
 # ── STATUS ───────────────────────────────────────────────────────────────────
 
