@@ -5,7 +5,7 @@ variable "region" {
 }
 variable "karpenter_version" {
   description = "Karpenter Helm chart version"
-  default     = "1.11.0"
+  default     = "1.15.0"
 }
 
 variable "karpenter_namespace" {
