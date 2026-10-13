@@ -73,6 +73,8 @@ resource "aws_iam_role_policy" "karpenter_controller_policy" {
   policy = templatefile("${path.module}/policies/karpenter-controller-policy.json", {
     cluster_name            = var.cluster_name
     region                  = var.region
+    partition               = data.aws_partition.current.partition
+    account_id              = data.aws_caller_identity.current.account_id
     karpenter_node_role_arn = aws_iam_role.karpenter_node.arn
     eks_cluster_arn         = aws_eks_cluster.eks.arn
     sqs_queue_arn           = aws_sqs_queue.karpenter_interruption.arn
