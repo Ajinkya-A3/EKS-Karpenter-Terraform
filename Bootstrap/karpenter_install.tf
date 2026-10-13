@@ -36,6 +36,11 @@ resource "helm_release" "karpenter" {
     },
 
     {
+      name  = "settings.featureGates.nodeRepair"
+      value = "true"
+    },
+
+    {
       name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
       value = local.karpenter_controller_role_arn
     },
